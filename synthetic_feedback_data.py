@@ -10,7 +10,7 @@ from google.colab import auth
 from google.cloud import aiplatform
 from google.cloud import storage
 import vertexai
-from vertexai.preview.language_models import TextGenerationModel
+from vertexai.generative_models import GenerativeModel, Part
 import random
 import time
 import uuid
@@ -36,8 +36,7 @@ print("Initialized Google Cloud Storage client.")
 
 # Input and output bucket details
 INPUT_BUCKET_NAME = 'label-studio-input-open-paws'
-#OUTPUT_BUCKET_NAME = 'label-studio-output-blah'
-OUTPUT_BUCKET_NAME = 'label-studio-output-blah'
+OUTPUT_BUCKET_NAME = 'label-studio-output'
 print(f"Input Bucket: {INPUT_BUCKET_NAME}")
 print(f"Output Bucket: {OUTPUT_BUCKET_NAME}")
 
@@ -289,7 +288,7 @@ def generate_synthetic_accounts(num_accounts):
     for i in range(num_accounts):
         account = {}
         # E-mail
-        account['email'] = f"synthetic_user{uuid.uuid4()}@example.com"
+        account['email'] = f"synthetic_user_{uuid.uuid4()}@example.com"
         # First Name
         account['first_name'] = f"FirstName{random.randint(1,10000)}"
         # Last Name
@@ -386,15 +385,16 @@ def process_input_data(input_data, account):
     """
     print("Processing input data...")
     # Depending on the type of input_data, handle accordingly
+    print(input_data)
     if 'dialogue' in input_data.get('data', {}):
         # Handle dialogue data
         input_task = "Please evaluate the following dialogue and provide your feedback:"
         dialogue_text = "\n".join([f"{item['author'].capitalize()}: {item['text']}" for item in input_data['data']['dialogue']])
         input_task += f"\n\n{dialogue_text}"
         print("Processed dialogue data.")
-    elif 'url' in input_data.get('data', {}):
+    elif 'url' in input_data:
         # Handle URL data (could be image or website)
-        url = input_data['data']['url']
+        url = input_data['url']
         print(f"Processing URL: {url}")
         if url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif')):
             # It's an image
@@ -507,16 +507,18 @@ def generate_image_analysis(image_url):
     print("Generating image analysis using Vertex AI...")
     try:
         # Initialize the GenerativeModel.
-        model = TextGenerationModel.from_pretrained("gemini-1.5-flash")
+        model = GenerativeModel("gemini-1.5-pro")
         print("Generative model initialized.")
 
-        # Prepare the image analysis
-        response = model.predict(
-            f"Analyze the content of this image: {image_url}",
-            max_output_tokens=512
+        response = model.generate_content(
+          [
+            Part.from_uri(image_url),
+            "Analyze the content of this image.",
+          ]
         )
+
         print("Image analysis generated.")
-        return response.text.strip()
+        return response.text
     except Exception as e:
         print(f"An error occurred during image analysis: {e}")
         return None
@@ -537,19 +539,16 @@ def generate_output_ranking(input_task, account):
     print("Generating output ranking using the Vertex AI model...")
     try:
         # Initialize the GenerativeModel.
-        model = TextGenerationModel.from_pretrained("gemini-1.5-flash")
+        model = GenerativeModel("gemini-1.5-pro")
         print("Generative model initialized.")
 
         # Construct the approach description
         prompt = f"{input_task}\nAs a synthetic account: {account}"
 
         # Generate the response.
-        response = model.predict(
-            prompt=prompt,
-            max_output_tokens=1024
-        )
+        response = model.generate_content(prompt)
         print("Model response generated.")
-        return response.text.strip()
+        return response.text
     except Exception as e:
         print(f"An error occurred while generating the output: {e}")
         return None
@@ -557,8 +556,8 @@ def generate_output_ranking(input_task, account):
 # Main script
 if __name__ == "__main__":
     # Number of synthetic accounts to generate
-    num_accounts = 100  # Adjust this number as needed to ensure manageability
-    print("Starting main script...")
+    num_accounts = 5  # Adjust this number as needed to ensure manageability
+    print(f"Starting main script. Dryrun={DRYRUN}")
     # Generate synthetic accounts
     accounts = generate_synthetic_accounts(num_accounts)
     account_index = 0  # Start from the first account
@@ -566,7 +565,10 @@ if __name__ == "__main__":
     while True:
         print("Checking for JSON files in the input bucket...")
         # List all JSON files in the input bucket
-        blobs = list(input_bucket.list_blobs())
+        if DRYRUN:
+          blobs = list(input_bucket.list_blobs(max_results=100))
+        else:
+          blobs = list(input_bucket.list_blobs())
         json_blobs = [blob for blob in blobs if blob.name.endswith('.json')]
         if not json_blobs:
             print("No JSON files found in the input bucket. Waiting for new files...")
@@ -598,6 +600,8 @@ if __name__ == "__main__":
                 if response_text is None:
                     print(f"Failed to generate response for {blob.name}")
                     continue
+
+                print(f"Generated response: {response_text}")
 
                 # Parse the response text as JSON
                 try:
@@ -717,9 +721,13 @@ if __name__ == "__main__":
                 print("Output data assembled.")
 
                 # Save the output data to the output bucket
-                output_blob = output_bucket.blob(blob.name)
-                output_blob.upload_from_string(json.dumps(output_data, indent=2), content_type='application/json')
-                print(f"Processed and saved output for {blob.name}")
+                if DRYRUN:
+                  print(f"DRYRUN: Processed {blob.name}")
+                  print(json.dumps(output_data, indent=2))
+                else:
+                  output_blob = output_bucket.blob(blob.name)
+                  output_blob.upload_from_string(json.dumps(output_data, indent=2), content_type='application/json')
+                  print(f"Processed and saved output for {blob.name}")
 
             except Exception as e:
                 print(f"An error occurred while processing {blob.name}: {e}")

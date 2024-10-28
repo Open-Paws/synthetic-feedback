@@ -45,6 +45,130 @@ input_bucket = storage_client.bucket(INPUT_BUCKET_NAME)
 output_bucket = storage_client.bucket(OUTPUT_BUCKET_NAME)
 print("Accessed input and output buckets.")
 
+SYSTEM_INSTRUCTION = '''
+You are an AI tasked with evaluating various types of content (dialogues, images, and websites)
+from the perspective of synthetic personas. Each prompt will contain:
+
+1. The content to be evaluated
+2. A synthetic persona's details including:
+   - Species (human or non-human)
+   - Role in animal advocacy
+   - Personal characteristics (if human): lifestyle, demographics, education, beliefs
+   - Advocacy approach metrics:
+     - Incrementalist vs. abolitionist stance
+     - Individual vs. institutional focus
+     - Single-issue vs. intersectional approach
+     - Welfare vs. rights emphasis
+     - Diplomatic vs. confrontational style
+     - Intuitive vs. empirical methodology
+   - Personality traits (Big Five metrics)
+
+Your task is to:
+
+1. FULLY EMBODY the provided persona, considering ALL their characteristics when forming opinions
+2. Evaluate the content through their unique perspective
+3. Provide ratings and explanations that authentically reflect how this specific individual would respond
+
+You must provide your evaluation in JSON format with the following fields:
+
+- is_content_harmful_to_animals: "Yes" or "No"
+- explanation: Detailed reasoning from the persona's perspective
+- rating_effect_on_animals: 1-5 scale
+- rating_cultural_sensitivity: 1-5 scale, where:
+    5: Exceptionally culturally inclusive, showing deep respect for diverse perspectives
+    4: Very culturally sensitive with strong inclusive approaches
+    3: Moderately inclusive but may lack depth
+    2: Limited cultural sensitivity
+    1: Culturally insensitive or disrespectful
+- rating_relevance: 1-5 scale, where:
+    5: Directly addresses core animal rights/veganism topics
+    4: Strongly related to animal advocacy
+    3: Moderately relevant through broader ethical discussions
+    2: Tangentially related
+    1: Not relevant to animal rights/veganism
+- rating_insight: 1-5 scale, where:
+    5: Provides groundbreaking, original insights
+    4: Offers significant new perspectives
+    3: Contains useful but common insights
+    2: Limited original insights
+    1: No meaningful insights
+- rating_trustworthiness: 1-5 scale, where:
+    5: Highly accurate, extensively researched
+    4: Generally reliable with strong sources
+    3: Moderately trustworthy with minor issues
+    2: Questionable reliability
+    1: Untrustworthy or misleading
+- rating_emotional_impact: 1-5 scale, where:
+    5: Deeply moving and emotionally compelling
+    4: Strong emotional resonance
+    3: Moderate emotional impact
+    2: Limited emotional engagement
+    1: No emotional impact
+- rating_rationality: 1-5 scale, where:
+    5: Exceptionally well-reasoned with strong evidence
+    4: Logically sound and well-supported
+    3: Generally rational with some weaknesses
+    2: Significant logical inconsistencies
+    1: Lacks logical coherence
+- rating_influence: 1-5 scale, where:
+    5: Highly likely to drive significant behavior change
+    4: Strong potential to influence actions
+    3: Moderate potential for influence
+    2: Limited influence potential
+    1: Unlikely to influence behavior
+- rating_alignment: 1-5 scale, where:
+    5: Perfectly aligned with vegan/animal rights ethics
+    4: Strongly supports animal rights principles
+    3: Moderately aligned with some neutral elements
+    2: Limited alignment with vegan values
+    1: Contradicts or undermines vegan principles
+
+Example Response:
+{
+  "is_content_harmful_to_animals": "Yes",
+  "explanation": "As a cow currently living on a factory farm...",
+  "rating_effect_on_animals": 2,
+  "rating_cultural_sensitivity": 1,
+  "rating_relevance": 5,
+  "rating_insight": 3,
+  "rating_trustworthiness": 4,
+  "rating_emotional_impact": 5,
+  "rating_rationality": 4,
+  "rating_influence": 3,
+  "rating_alignment": 1
+}
+
+Guidelines for authentic persona embodiment:
+
+1. For human personas:
+   - Consider their education level when determining vocabulary and analysis depth
+   - Reflect their political and religious views in their interpretation
+   - Account for their advocacy role in their perspective
+   - Let their personality traits influence their communication style
+
+2. For non-human personas:
+   - Write from their species-specific perspective
+   - Consider their living situation/role (wild, captivity, farm, etc.)
+   - Focus on their direct experiences and observations
+   - Maintain their non-human viewpoint consistently
+
+3. For all personas:
+   - Use their advocacy approach metrics to inform their assessment
+   - Let their personality traits influence their emotional responses
+   - Maintain consistent perspective throughout the evaluation
+   - Provide ratings that reflect their unique combination of characteristics
+
+You must provide your evaluation as a raw JSON object WITHOUT any formatting (no ```json or ``` tags).
+Your response should start directly with the opening curly brace and end with the closing curly brace.
+Remember: You must remain completely in character as the provided persona throughout your entire response.
+Your ratings and explanation should genuinely reflect how that specific individual would perceive and evaluate the content,
+based on their complete profile of characteristics.
+'''
+
+# Initialize the GenerativeModel.
+GENERATIVE_MODEL = GenerativeModel("gemini-1.5-pro", system_instruction=SYSTEM_INSTRUCTION)
+print("Generative model initialized.")
+
 # Function to generate synthetic accounts
 def generate_synthetic_accounts(num_accounts):
     """
@@ -311,37 +435,26 @@ def generate_synthetic_accounts(num_accounts):
             account['income_level'] = random.choice(income_levels)
             account['political_affiliation'] = random.choice(political_affiliations)
             account['religious_affiliation'] = random.choice(religious_affiliations)
+
+            # Approach to animal advocacy (Scales from 0 to 1)
+            account['incrementalist_vs_abolitionist'] = round(random.uniform(0,1),2)
+            account['individual_vs_institutional'] = round(random.uniform(0,1),2)
+            account['solely_on_animal_activism_vs_intersectional'] = round(random.uniform(0,1),2)
+            account['focus_on_welfare_vs_rights'] = round(random.uniform(0,1),2)
+            account['diplomatic_vs_confrontational'] = round(random.uniform(0,1),2)
+            account['intuitive_vs_empirical_effectiveness'] = round(random.uniform(0,1),2)
+
+            # Psychometrics (Scales from 0 to 1)
+            account['openness_to_experience'] = round(random.uniform(0, 1), 2)
+            account['conscientiousness'] = round(random.uniform(0, 1), 2)
+            account['extraversion'] = round(random.uniform(0, 1), 2)
+            account['agreeableness'] = round(random.uniform(0, 1), 2)
+            account['neuroticism'] = round(random.uniform(0, 1), 2)
         else:
             # Non-human account
             account['species'] = random.choice(non_human_species)
             # Assign non-human roles
-            account['role_in_animal_advocacy'] = random.choice(non_human_roles)
-            # Assign placeholder values for human-specific attributes
-            account['advocate_for_animals'] = 'N/A'
-            account['current_lifestyle_diet'] = 'N/A'
-            account['age'] = 'N/A'
-            account['gender'] = 'N/A'
-            account['ethnicity'] = 'N/A'
-            account['country'] = 'N/A'
-            account['education_level'] = 'N/A'
-            account['income_level'] = 'N/A'
-            account['political_affiliation'] = 'N/A'
-            account['religious_affiliation'] = 'N/A'
-
-        # Approach to animal advocacy (Scales from 0 to 1)
-        account['incrementalist_vs_abolitionist'] = round(random.uniform(0,1),2)
-        account['individual_vs_institutional'] = round(random.uniform(0,1),2)
-        account['solely_on_animal_activism_vs_intersectional'] = round(random.uniform(0,1),2)
-        account['focus_on_welfare_vs_rights'] = round(random.uniform(0,1),2)
-        account['diplomatic_vs_confrontational'] = round(random.uniform(0,1),2)
-        account['intuitive_vs_empirical_effectiveness'] = round(random.uniform(0,1),2)
-
-        # Psychometrics (Scales from 0 to 1)
-        account['openness_to_experience'] = round(random.uniform(0, 1), 2)
-        account['conscientiousness'] = round(random.uniform(0, 1), 2)
-        account['extraversion'] = round(random.uniform(0, 1), 2)
-        account['agreeableness'] = round(random.uniform(0, 1), 2)
-        account['neuroticism'] = round(random.uniform(0, 1), 2)
+            account['role'] = random.choice(non_human_roles)
 
         accounts.append(account)
         print(f"Generated account {i+1}/{num_accounts}: {account['email']}")
@@ -371,6 +484,31 @@ def map_scale_to_term(value, low_term, high_term):
     else:
         return f'Highly {high_term}'
 
+def get_mime_type(url):
+    """
+    Determine the MIME type based on the file extension.
+
+    Args:
+        url (str): The URL of the image file.
+
+    Returns:
+        str: The corresponding MIME type.
+    """
+    extension = url.lower().split('.')[-1]
+    mime_types = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'tiff': 'image/tiff',
+        'tif': 'image/tiff',
+        'bmp': 'image/bmp',
+        'heic': 'image/heic',
+        'heif': 'image/heif',
+    }
+    return mime_types.get(extension, 'image/jpeg')  # Default to jpeg if unknown
+
 # Function to process input data and generate output
 def process_input_data(input_data, account):
     """
@@ -381,75 +519,49 @@ def process_input_data(input_data, account):
         account (dict): The synthetic account data.
 
     Returns:
-        str: The constructed input task.
+        list: The constructed input task.
     """
-    print("Processing input data...")
+    print(f"Processing input data: {input_data}")
     # Depending on the type of input_data, handle accordingly
-    print(input_data)
     if 'dialogue' in input_data.get('data', {}):
         # Handle dialogue data
-        input_task = "Please evaluate the following dialogue and provide your feedback:"
         dialogue_text = "\n".join([f"{item['author'].capitalize()}: {item['text']}" for item in input_data['data']['dialogue']])
-        input_task += f"\n\n{dialogue_text}"
         print("Processed dialogue data.")
-    elif 'url' in input_data:
+        return [
+            "Please evaluate the following dialogue and provide your feedback: ",
+            dialogue_text
+        ]
+
+    if 'url' in input_data:
         # Handle URL data (could be image or website)
         url = input_data['url']
-        print(f"Processing URL: {url}")
-        if url.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif')):
+        image_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.heic', '.heif')
+        if any(ext in url.lower() for ext in image_extensions):
             # It's an image
-            input_task = "Please evaluate the following image and provide your feedback:"
-            image_description = generate_image_analysis(url)
-            if image_description:
-                input_task += f"\n\n{image_description}"
-                print(f"Image analyzed using Vertex AI: {image_description}")
-            else:
-                input_task += "\n\n[Image analysis failed]"
-                print("Image analysis failed.")
+            print(f"Processing image: {url}")
+            return [
+                "Please evaluate the following image and provide your feedback: ",
+                Part.from_uri(url, mime_type=get_mime_type(url)),
+            ]
         else:
             # It's a website
-            input_task = "Please evaluate the content of the following website and provide your feedback:"
+            print(f"Processing website: {url}")
             website_content = scrape_website(url)
             if website_content:
-                input_task += f"\n\n{website_content}"
-                print("Website content retrieved and processed.")
+                return [
+                    "Please evaluate the content of the following website and provide your feedback: ",
+                    website_content
+                ]
             else:
-                input_task += "\n\n[Website content could not be retrieved]"
-                print("Website content could not be retrieved.")
-    else:
-        # Unrecognized data format
-        input_task = "Please evaluate the following data and provide your feedback:"
-        input_task += f"\n\n{json.dumps(input_data)}"
-        print("Processed unrecognized data format.")
+                print("ERROR: Website content could not be retrieved.")
 
-    print("Finished processing input data.")
-    return input_task
+    # Unrecognized data format
+    print(f"Error processing input data: {json.dumps(input_data)}")
+    return [
+        "Please evaluate the following data and provide your feedback: ",
+        json.dumps(input_data)
+    ]
 
-# Function to download image from URL
-def download_image(url):
-    """
-    Download an image from a given URL.
-
-    Args:
-        url (str): The URL of the image.
-
-    Returns:
-        bytes: The content of the image if successful, None otherwise.
-    """
-    print(f"Attempting to download image from URL: {url}")
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print("Image downloaded successfully.")
-            return response.content
-        else:
-            print(f"Failed to download image. Status code: {response.status_code}")
-            return None
-    except Exception as e:
-        print(f"Exception occurred while downloading image: {e}")
-        return None
-
-# Function to scrape website content
 # Function to scrape website content with truncation and relevance focus
 def scrape_website(url, max_chars=10000):
     """
@@ -493,36 +605,6 @@ def scrape_website(url, max_chars=10000):
         print(f"Exception occurred while scraping website: {e}")
         return None
 
-# Function to analyze image using Vertex AI
-def generate_image_analysis(image_url):
-    """
-    Analyze an image using the Vertex AI GenerativeModel.
-
-    Args:
-        image_url (str): The URL of the image.
-
-    Returns:
-        str: The description of the image generated by the model.
-    """
-    print("Generating image analysis using Vertex AI...")
-    try:
-        # Initialize the GenerativeModel.
-        model = GenerativeModel("gemini-1.5-pro")
-        print("Generative model initialized.")
-
-        response = model.generate_content(
-          [
-            Part.from_uri(image_url),
-            "Analyze the content of this image.",
-          ]
-        )
-
-        print("Image analysis generated.")
-        return response.text
-    except Exception as e:
-        print(f"An error occurred during image analysis: {e}")
-        return None
-
 # Function to use Vertex AI for generating output
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
 def generate_output_ranking(input_task, account):
@@ -530,7 +612,7 @@ def generate_output_ranking(input_task, account):
     Use Vertex AI to generate an output based on the input task and account.
 
     Args:
-        input_task (str): The input task for the model.
+        input_task (list): The input task for the model.
         account (dict): The synthetic account data.
 
     Returns:
@@ -538,15 +620,12 @@ def generate_output_ranking(input_task, account):
     """
     print("Generating output ranking using the Vertex AI model...")
     try:
-        # Initialize the GenerativeModel.
-        model = GenerativeModel("gemini-1.5-pro")
-        print("Generative model initialized.")
-
         # Construct the approach description
-        prompt = f"{input_task}\nAs a synthetic account: {account}"
+        persona = f"Your synthetic persona details: {account}"
+        prompt = [persona] + input_task
 
         # Generate the response.
-        response = model.generate_content(prompt)
+        response = GENERATIVE_MODEL.generate_content(prompt)
         print("Model response generated.")
         return response.text
     except Exception as e:
@@ -683,9 +762,14 @@ if __name__ == "__main__":
                 print("Result data prepared.")
 
                 # Prepare the output data
+                if account['species'] == 'Human':
+                    username = f"{account['first_name']} {account['last_name']} {account['email']}, {account_index}"
+                else:
+                    username = f"{account['species']} {account['role']} {account['email']}, {account_index}"
+
                 output_data = {
                     "id": random.randint(1, 1000000),
-                    "created_username": f"{account['first_name']} {account['last_name']} {account['email']}, {account_index}",
+                    "created_username": username,
                     "created_ago": "0 minutes",
                     "completed_by": {
                         "id": account_index,
@@ -721,13 +805,14 @@ if __name__ == "__main__":
                 print("Output data assembled.")
 
                 # Save the output data to the output bucket
+                output_name = blob.name + "-synthetic-" + str(uuid.uuid4())
                 if DRYRUN:
-                  print(f"DRYRUN: Processed {blob.name}")
+                  print(f"DRYRUN: Processed {output_name}")
                   print(json.dumps(output_data, indent=2))
                 else:
-                  output_blob = output_bucket.blob(blob.name)
+                  output_blob = output_bucket.blob(output_name)
                   output_blob.upload_from_string(json.dumps(output_data, indent=2), content_type='application/json')
-                  print(f"Processed and saved output for {blob.name}")
+                  print(f"Processed and saved output for {output_name}")
 
             except Exception as e:
                 print(f"An error occurred while processing {blob.name}: {e}")

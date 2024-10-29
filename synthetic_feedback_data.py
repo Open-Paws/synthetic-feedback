@@ -14,6 +14,7 @@ from vertexai.generative_models import GenerativeModel, Part
 import random
 import time
 import uuid
+import datetime
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Authenticate to Google Cloud
@@ -763,7 +764,7 @@ if __name__ == "__main__":
 
 
                 # Prepare the output data
-                current_time = time.strftime("%Y-%m-%dT%H:%M:%S.%fZ", time.gmtime())
+                current_time = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
                 task = {
                     "cancelled_annotations": 0,
                     "comment_authors": [],

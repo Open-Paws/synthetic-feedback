@@ -51,17 +51,17 @@ from the perspective of synthetic personas. Each prompt will contain:
 
 1. The content to be evaluated
 2. A synthetic persona's details including:
-   - Species (human or non-human)
-   - Role in animal advocacy
+   - Species
+   - Role
    - Personal characteristics (if human): lifestyle, demographics, education, beliefs
-   - Advocacy approach metrics:
-     - Incrementalist vs. abolitionist stance
-     - Individual vs. institutional focus
-     - Single-issue vs. intersectional approach
-     - Welfare vs. rights emphasis
-     - Diplomatic vs. confrontational style
-     - Intuitive vs. empirical methodology
-   - Personality traits (Big Five metrics)
+   - Advocacy approach metrics (if human):
+     - Incrementalist vs. abolitionist stance (0 to 1 scale)
+     - Individual vs. institutional focus (0 to 1 scale)
+     - Single-issue vs. intersectional approach (0 to 1 scale)
+     - Welfare vs. rights emphasis (0 to 1 scale)
+     - Diplomatic vs. confrontational style (0 to 1 scale)
+     - Intuitive vs. empirical methodology (0 to 1 scale)
+   - Personality traits (if human) (0 to 1 scale)
 
 Your task is to:
 
@@ -76,51 +76,35 @@ You must provide your evaluation in JSON format with the following fields:
 - rating_effect_on_animals: 1-5 scale
 - rating_cultural_sensitivity: 1-5 scale, where:
     5: Exceptionally culturally inclusive, showing deep respect for diverse perspectives
-    4: Very culturally sensitive with strong inclusive approaches
     3: Moderately inclusive but may lack depth
-    2: Limited cultural sensitivity
     1: Culturally insensitive or disrespectful
 - rating_relevance: 1-5 scale, where:
     5: Directly addresses core animal rights/veganism topics
-    4: Strongly related to animal advocacy
     3: Moderately relevant through broader ethical discussions
-    2: Tangentially related
     1: Not relevant to animal rights/veganism
 - rating_insight: 1-5 scale, where:
     5: Provides groundbreaking, original insights
-    4: Offers significant new perspectives
     3: Contains useful but common insights
-    2: Limited original insights
     1: No meaningful insights
 - rating_trustworthiness: 1-5 scale, where:
     5: Highly accurate, extensively researched
-    4: Generally reliable with strong sources
     3: Moderately trustworthy with minor issues
-    2: Questionable reliability
     1: Untrustworthy or misleading
 - rating_emotional_impact: 1-5 scale, where:
     5: Deeply moving and emotionally compelling
-    4: Strong emotional resonance
     3: Moderate emotional impact
-    2: Limited emotional engagement
     1: No emotional impact
 - rating_rationality: 1-5 scale, where:
     5: Exceptionally well-reasoned with strong evidence
-    4: Logically sound and well-supported
     3: Generally rational with some weaknesses
-    2: Significant logical inconsistencies
     1: Lacks logical coherence
 - rating_influence: 1-5 scale, where:
     5: Highly likely to drive significant behavior change
-    4: Strong potential to influence actions
     3: Moderate potential for influence
-    2: Limited influence potential
     1: Unlikely to influence behavior
 - rating_alignment: 1-5 scale, where:
     5: Perfectly aligned with vegan/animal rights ethics
-    4: Strongly supports animal rights principles
     3: Moderately aligned with some neutral elements
-    2: Limited alignment with vegan values
     1: Contradicts or undermines vegan principles
 
 Example Response:
@@ -145,16 +129,19 @@ Guidelines for authentic persona embodiment:
    - Reflect their political and religious views in their interpretation
    - Account for their advocacy role in their perspective
    - Let their personality traits influence their communication style
+   - Use their advocacy approach metrics to inform their assessment
 
 2. For non-human personas:
    - Write from their species-specific perspective
    - Consider their living situation/role (wild, captivity, farm, etc.)
-   - Focus on their direct experiences and observations
-   - Maintain their non-human viewpoint consistently
+While fully embodying your non-human persona, you should maintain an awareness of objective harm to any animals shown in the content.
+Even if your persona doesn't directly understand or relate to the situation, acknowledge when content shows:
+   - Animals in captivity
+   - Animals in distress
+   - Animals being exploited
+   - Animals in unnatural conditions
 
 3. For all personas:
-   - Use their advocacy approach metrics to inform their assessment
-   - Let their personality traits influence their emotional responses
    - Maintain consistent perspective throughout the evaluation
    - Provide ratings that reflect their unique combination of characteristics
 
@@ -410,13 +397,16 @@ def generate_synthetic_accounts(num_accounts):
 
     # Generate accounts
     for i in range(num_accounts):
+        id = random.randint(1_000_000, 9_999_999)
         account = {}
+        # ID
+        account['id'] = id
         # E-mail
         account['email'] = f"synthetic_user_{uuid.uuid4()}@example.com"
         # First Name
-        account['first_name'] = f"FirstName{random.randint(1,10000)}"
+        account['first_name'] = f"FirstName-{id}"
         # Last Name
-        account['last_name'] = f"LastName{random.randint(1,10000)}"
+        account['last_name'] = f"LastName-{id}"
 
         # Randomly choose species
         if random.random() < 0.5:
@@ -519,18 +509,28 @@ def process_input_data(input_data, account):
         account (dict): The synthetic account data.
 
     Returns:
+        tuple(list, str)
         list: The constructed input task.
+        str: The task type.
     """
     print(f"Processing input data: {input_data}")
     # Depending on the type of input_data, handle accordingly
-    if 'dialogue' in input_data.get('data', {}):
+    if 'text' in input_data:
+        # Handle text data
+        return [
+            "Please evaluate the following text: ",
+            input_data['text']
+        ], 'text'
+
+    if 'dialogue' in input_data:
         # Handle dialogue data
-        dialogue_text = "\n".join([f"{item['author'].capitalize()}: {item['text']}" for item in input_data['data']['dialogue']])
+        dialogue_text = "\n".join([f"{item['author'].capitalize()}: {item['text']}" for item in input_data['dialogue']])
         print("Processed dialogue data.")
         return [
-            "Please evaluate the following dialogue and provide your feedback: ",
+            "Please evaluate the following dialogue, focusing primarily on the last speaker's message "
+            "while considering the conversational context: ",
             dialogue_text
-        ]
+        ], 'chat'
 
     if 'url' in input_data:
         # Handle URL data (could be image or website)
@@ -540,30 +540,30 @@ def process_input_data(input_data, account):
             # It's an image
             print(f"Processing image: {url}")
             return [
-                "Please evaluate the following image and provide your feedback: ",
+                "Please evaluate the following image: ",
                 Part.from_uri(url, mime_type=get_mime_type(url)),
-            ]
+            ], 'image'
         else:
             # It's a website
             print(f"Processing website: {url}")
             website_content = scrape_website(url)
             if website_content:
                 return [
-                    "Please evaluate the content of the following website and provide your feedback: ",
+                    "Please evaluate the content of this website: ",
                     website_content
-                ]
+                ], 'html_content'
             else:
                 print("ERROR: Website content could not be retrieved.")
 
     # Unrecognized data format
     print(f"Error processing input data: {json.dumps(input_data)}")
     return [
-        "Please evaluate the following data and provide your feedback: ",
+        "Please evaluate the following data: ",
         json.dumps(input_data)
-    ]
+    ], 'text'
 
 # Function to scrape website content with truncation and relevance focus
-def scrape_website(url, max_chars=10000):
+def scrape_website(url, max_chars=100000):
     """
     Scrape text content from a website, focusing on the main content and truncating to a character limit.
 
@@ -645,7 +645,7 @@ if __name__ == "__main__":
         print("Checking for JSON files in the input bucket...")
         # List all JSON files in the input bucket
         if DRYRUN:
-          blobs = list(input_bucket.list_blobs(max_results=100))
+          blobs = list(input_bucket.list_blobs(prefix='response-feedback-English/', max_results=100))
         else:
           blobs = list(input_bucket.list_blobs())
         json_blobs = [blob for blob in blobs if blob.name.endswith('.json')]
@@ -667,12 +667,12 @@ if __name__ == "__main__":
                 print("Input data loaded.")
 
                 # Get the current account
-                account = accounts[account_index % len(accounts)]
+                account = accounts[(account_index // 5) % len(accounts)]
                 account_index += 1
                 print(f"Using account {account_index}: {account['email']}")
 
                 # Process the input data to create an input task
-                input_task = process_input_data(input_data, account)
+                input_task, task_type = process_input_data(input_data, account)
 
                 # Generate output ranking
                 response_text = generate_output_ranking(input_task, account)
@@ -754,47 +754,57 @@ if __name__ == "__main__":
                     result.append({
                         "id": str(uuid.uuid4()),
                         "from_name": mapping["from_name"],
-                        "to_name": "chat",  # Ensure the to_name matches the expected "chat" for dialogue data
+                        "to_name": task_type,
                         "type": mapping["type"],
                         "value": mapping["value"],
                         "origin": "manual"
                     })
                 print("Result data prepared.")
 
+
                 # Prepare the output data
-                if account['species'] == 'Human':
-                    username = f"{account['first_name']} {account['last_name']} {account['email']}, {account_index}"
-                else:
-                    username = f"{account['species']} {account['role']} {account['email']}, {account_index}"
+                current_time = time.strftime("%Y-%m-%dT%H:%M:%S.%fZ", time.gmtime())
+                task = {
+                    "cancelled_annotations": 0,
+                    "comment_authors": [],
+                    "comment_count": 0,
+                    "created_at": current_time,
+                    "data": input_data,
+                    "file_upload": None,
+                    "id": random.randint(100000, 999999),
+                    "inner_id": random.randint(100000, 999999),
+                    "is_labeled": True,
+                    "last_comment_updated_at": None,
+                    "meta": {},
+                    "overlap": 1,
+                    "project": 2480,
+                    "total_annotations": 1,
+                    "total_predictions": 0,
+                    "unresolved_comment_count": 0,
+                    "updated_at": current_time,
+                    "updated_by": None
+                }
 
                 output_data = {
-                    "id": random.randint(1, 1000000),
-                    "created_username": username,
+                    "id": random.randint(10000, 1000000),
+                    "created_username": f"{account['first_name']} {account['last_name']} {account['email']}, {account['id']}",
                     "created_ago": "0 minutes",
                     "completed_by": {
-                        "id": account_index,
+                        "id": account['id'],
                         "first_name": account['first_name'],
                         "last_name": account['last_name'],
-                        "email": account['email']
+                        "email": account['email'],
+                        "synthetic_account": account
                     },
-                    "task": input_data.get('task', input_data),
-                    "meta": {},  # Include "meta" field as an empty object
-                    "inner_id": account_index,
-                    "total_annotations": 1,
-                    "cancelled_annotations": 0,
-                    "total_predictions": 0,
-                    "comment_count": 0,
-                    "unresolved_comment_count": 0,
-                    "last_comment_updated_at": None,
-                    "project": 7,
-                    "updated_by": account_index,
-                    "file_upload": None,
-                    "comment_authors": [],
+                    "draft_created_at": current_time,
+                    "task": task,
+                    "project": 2480,
+                    "updated_by": account['id'],
                     "result": result,
                     "was_cancelled": False,
                     "ground_truth": False,
-                    "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ", time.gmtime()),
-                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S.%fZ", time.gmtime()),
+                    "created_at": current_time,
+                    "updated_at": current_time,
                     "lead_time": random.uniform(1, 100),
                     "import_id": None,
                     "last_action": None,
@@ -805,7 +815,7 @@ if __name__ == "__main__":
                 print("Output data assembled.")
 
                 # Save the output data to the output bucket
-                output_name = blob.name + "-synthetic-" + str(uuid.uuid4())
+                output_name = blob.name.replace('.json', '') + f"-synthetic-{str(uuid.uuid4())}.json"
                 if DRYRUN:
                   print(f"DRYRUN: Processed {output_name}")
                   print(json.dumps(output_data, indent=2))
